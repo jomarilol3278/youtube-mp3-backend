@@ -46,8 +46,12 @@ app.post('/api/convert', (req, res) => {
     const protocol = req.protocol;
     const host = req.get('host');
 
-    // Updated player client bypass flags to fix the extraction error
-    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=tv,mweb,android" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
+    // Check if cookies file exists to bypass YouTube datacenter blocks
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+
+    // Let yt-dlp automatically extract the best audio and convert to mp3 via ffmpeg
+    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 ${cookiesFlag} -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
