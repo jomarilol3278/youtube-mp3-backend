@@ -1,10 +1,18 @@
 const express = require('express');
 const cors = require('cors');
+const { exec } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+
+const downloadsDir = path.join(__dirname, 'downloads');
+if (!fs.existsSync(downloadsDir)) {
+    fs.mkdirSync(downloadsDir);
+}
 
 function cleanYoutubeUrl(rawUrl) {
     try {
@@ -21,14 +29,7 @@ function cleanYoutubeUrl(rawUrl) {
     }
 }
 
-// List of active public Cobalt API instances
-const COBALT_INSTANCES = [
-    'https://cobalt.stream',
-    'https://api.cobalt.tools',
-    'https://cobalt.q1.02.ls'
-];
-
-app.post('/api/convert', async (req, res) => {
+app.post('/api/convert', (req, res) => {
     let { videoUrl } = req.body;
 
     if (!videoUrl) {
@@ -36,41 +37,38 @@ app.post('/api/convert', async (req, res) => {
     }
 
     videoUrl = cleanYoutubeUrl(videoUrl);
-    console.log('Converting URL:', videoUrl);
+    const fileId = Date.now();
+    const outputPath = path.join(downloadsDir, `${fileId}.mp3`);
 
-    for (const instance of COBALT_INSTANCES) {
-        try {
-            console.log(`Trying instance: ${instance}`);
-            const response = await fetch(`${instance}/`, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    url: videoUrl,
-                    downloadMode: 'audio',
-                    audioFormat: 'mp3'
-                })
-            });
+    console.log('Downloading with yt-dlp:', videoUrl);
 
-            const data = await response.json();
+    const protocol = req.protocol;
+    const host = req.get('host');
 
-            if (data.status === 'tunnel' || data.status === 'redirect') {
-                console.log('Conversion successful via:', instance);
-                return res.json({
-                    success: true,
-                    downloadUrl: data.url
-                });
-            } else {
-                console.warn(`Instance ${instance} returned status:`, data.status || data.error?.code);
-            }
-        } catch (err) {
-            console.warn(`Failed reaching instance ${instance}:`, err.message);
+    // Uses the mweb client and forces player JS fetch to bypass datacenter blocks
+    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=mweb;player_skip=webpage" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error('yt-dlp error:', stderr || error.message);
+            return res.status(500).json({ error: 'Failed to extract audio stream.' });
         }
-    }
 
-    return res.status(500).json({ error: 'All conversion nodes are currently busy. Please try again in a few seconds.' });
+        console.log('Download complete:', fileId);
+        res.json({ 
+            success: true, 
+            downloadUrl: `${protocol}://${host}/download/${fileId}.mp3` 
+        });
+    });
+});
+
+app.get('/download/:filename', (req, res) => {
+    const filePath = path.join(downloadsDir, req.params.filename);
+    res.download(filePath, (err) => {
+        if (!err && fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath); // Clean up file after download
+        }
+    });
 });
 
 const PORT = process.env.PORT || 5000;
