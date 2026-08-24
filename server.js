@@ -42,6 +42,10 @@ app.post('/api/convert', (req, res) => {
 
     console.log('Downloading with native yt-dlp:', videoUrl);
 
+    // Dynamic host builder so it automatically works locally AND on Render
+    const protocol = req.protocol;
+    const host = req.get('host');
+
     // Let yt-dlp automatically extract the best audio and convert to mp3 via ffmpeg
     const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=ios,web" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
 
@@ -54,7 +58,7 @@ app.post('/api/convert', (req, res) => {
         console.log('Download complete:', fileId);
         res.json({ 
             success: true, 
-            downloadUrl: `http://127.0.0.1:5000/download/${fileId}.mp3` 
+            downloadUrl: `${protocol}://${host}/download/${fileId}.mp3` 
         });
     });
 });
@@ -68,6 +72,9 @@ app.get('/download/:filename', (req, res) => {
     });
 });
 
-app.listen(5000, '127.0.0.1', () => {
-    console.log('✅ Server running at http://127.0.0.1:5000');
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+
 });
