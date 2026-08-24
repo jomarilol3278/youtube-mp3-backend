@@ -46,8 +46,8 @@ app.post('/api/convert', (req, res) => {
     const protocol = req.protocol;
     const host = req.get('host');
 
-    // Let yt-dlp automatically extract the best audio and convert to mp3 via ffmpeg
-    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=ios,web" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
+    // Updated player client bypass flags to fix the extraction error
+    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=tv,mweb,android" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -76,5 +76,4 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
-
 });
