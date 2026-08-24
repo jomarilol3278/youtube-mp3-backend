@@ -45,8 +45,8 @@ app.post('/api/convert', (req, res) => {
     const protocol = req.protocol;
     const host = req.get('host');
 
-    // Uses android_vr & tvhtml5 client endpoints which currently bypass cloud IP blocks
-    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=android_vr,tvhtml5;skip=webpage" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
+    // Enables YouTube OAuth authentication for yt-dlp to bypass datacenter IP bans
+    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --username oauth2 -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
