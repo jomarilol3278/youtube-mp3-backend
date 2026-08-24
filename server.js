@@ -42,16 +42,11 @@ app.post('/api/convert', (req, res) => {
 
     console.log('Downloading with native yt-dlp:', videoUrl);
 
-    // Dynamic host builder so it automatically works locally AND on Render
     const protocol = req.protocol;
     const host = req.get('host');
 
-    // Check if cookies file exists to bypass YouTube datacenter blocks
-    const cookiesPath = path.join(__dirname, 'cookies.txt');
-    const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
-
-    // Let yt-dlp automatically extract the best audio and convert to mp3 via ffmpeg
-    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 ${cookiesFlag} -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
+    // Uses android_vr & tvhtml5 client endpoints which currently bypass cloud IP blocks
+    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --extractor-args "youtube:player_client=android_vr,tvhtml5;skip=webpage" -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
