@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 
 const app = express();
 
@@ -22,6 +21,13 @@ function cleanYoutubeUrl(rawUrl) {
     }
 }
 
+// List of active public Cobalt API instances
+const COBALT_INSTANCES = [
+    'https://cobalt.stream',
+    'https://api.cobalt.tools',
+    'https://cobalt.q1.02.ls'
+];
+
 app.post('/api/convert', async (req, res) => {
     let { videoUrl } = req.body;
 
@@ -30,38 +36,41 @@ app.post('/api/convert', async (req, res) => {
     }
 
     videoUrl = cleanYoutubeUrl(videoUrl);
-    console.log('Converting via Cobalt API:', videoUrl);
+    console.log('Converting URL:', videoUrl);
 
-    try {
-        const response = await fetch('https://api.cobalt.tools/', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                url: videoUrl,
-                downloadMode: 'audio',
-                audioFormat: 'mp3'
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.status === 'tunnel' || data.status === 'redirect') {
-            console.log('Conversion successful!');
-            return res.json({
-                success: true,
-                downloadUrl: data.url
+    for (const instance of COBALT_INSTANCES) {
+        try {
+            console.log(`Trying instance: ${instance}`);
+            const response = await fetch(`${instance}/`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: videoUrl,
+                    downloadMode: 'audio',
+                    audioFormat: 'mp3'
+                })
             });
-        } else {
-            console.error('Cobalt error response:', data);
-            return res.status(500).json({ error: data.text || 'Failed to process YouTube video.' });
+
+            const data = await response.json();
+
+            if (data.status === 'tunnel' || data.status === 'redirect') {
+                console.log('Conversion successful via:', instance);
+                return res.json({
+                    success: true,
+                    downloadUrl: data.url
+                });
+            } else {
+                console.warn(`Instance ${instance} returned status:`, data.status || data.error?.code);
+            }
+        } catch (err) {
+            console.warn(`Failed reaching instance ${instance}:`, err.message);
         }
-    } catch (error) {
-        console.error('Server error during request:', error.message);
-        return res.status(500).json({ error: 'Failed to connect to media processing service.' });
     }
+
+    return res.status(500).json({ error: 'All conversion nodes are currently busy. Please try again in a few seconds.' });
 });
 
 const PORT = process.env.PORT || 5000;
