@@ -1,18 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const { exec } = require('child_process');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-
-const downloadsDir = path.join(__dirname, 'downloads');
-if (!fs.existsSync(downloadsDir)) {
-    fs.mkdirSync(downloadsDir);
-}
 
 function cleanYoutubeUrl(rawUrl) {
     try {
@@ -29,7 +22,7 @@ function cleanYoutubeUrl(rawUrl) {
     }
 }
 
-app.post('/api/convert', (req, res) => {
+app.post('/api/convert', async (req, res) => {
     let { videoUrl } = req.body;
 
     if (!videoUrl) {
@@ -37,38 +30,38 @@ app.post('/api/convert', (req, res) => {
     }
 
     videoUrl = cleanYoutubeUrl(videoUrl);
-    const fileId = Date.now();
-    const outputPath = path.join(downloadsDir, `${fileId}.mp3`);
+    console.log('Converting via Cobalt API:', videoUrl);
 
-    console.log('Downloading with native yt-dlp:', videoUrl);
-
-    const protocol = req.protocol;
-    const host = req.get('host');
-
-    // Enables YouTube OAuth authentication for yt-dlp to bypass datacenter IP bans
-    const command = `yt-dlp -x --audio-format mp3 --audio-quality 0 --username oauth2 -o "${outputPath}" --no-check-certificates --no-warnings "${videoUrl}"`;
-
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error('yt-dlp error:', stderr || error.message);
-            return res.status(500).json({ error: 'Failed to extract audio stream.' });
-        }
-
-        console.log('Download complete:', fileId);
-        res.json({ 
-            success: true, 
-            downloadUrl: `${protocol}://${host}/download/${fileId}.mp3` 
+    try {
+        const response = await fetch('https://api.cobalt.tools/', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                url: videoUrl,
+                downloadMode: 'audio',
+                audioFormat: 'mp3'
+            })
         });
-    });
-});
 
-app.get('/download/:filename', (req, res) => {
-    const filePath = path.join(downloadsDir, req.params.filename);
-    res.download(filePath, (err) => {
-        if (!err && fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath); // Cleanup file after serving
+        const data = await response.json();
+
+        if (data.status === 'tunnel' || data.status === 'redirect') {
+            console.log('Conversion successful!');
+            return res.json({
+                success: true,
+                downloadUrl: data.url
+            });
+        } else {
+            console.error('Cobalt error response:', data);
+            return res.status(500).json({ error: data.text || 'Failed to process YouTube video.' });
         }
-    });
+    } catch (error) {
+        console.error('Server error during request:', error.message);
+        return res.status(500).json({ error: 'Failed to connect to media processing service.' });
+    }
 });
 
 const PORT = process.env.PORT || 5000;
